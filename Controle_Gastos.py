@@ -33,16 +33,17 @@ def add_contato():
 
     # Atualizar a largura da Listbox
     carrega_lista_tamanho()
+    salva_contato()
 
 def deleta_contato():
-    selected_index = contacts_listbox.curselection()  # Obtém o índice da linha selecionada
+    selected_index = contacts_listbox.curselection()
     if selected_index:  # Verifica se uma linha está selecionada
-        contacts_listbox.delete(selected_index)  # Exclui a linha selecionada da Listbox
+        contacts_listbox.delete(selected_index)
+        salva_contato()  
     else:
         messagebox.showinfo("Aviso", "Selecione uma linha para excluir.")
     carrega_lista_tamanho()
 
-# Função para atualizar a largura da Listbox de acordo com o texto mais longo presente nela
 def carrega_lista_tamanho():
     if contacts_listbox.size() > 0:
         max_width = max(len(item) for item in contacts_listbox.get(0, tkinter.END))
@@ -67,7 +68,10 @@ def salva_contato():
     with open(file_path, "w") as file:
         for index in range(contacts_listbox.size()):
             item_text = contacts_listbox.get(index)
+            print("Item a ser gravado:", item_text)  # Adiciona essa linha para ver o que está sendo gravado
             file.write(item_text + '\n')
+
+    print("Contatos salvos com sucesso!")
 
 def get_desktop_path():
     desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'TrabalhoFacul')
@@ -94,6 +98,84 @@ def carrega_contatos():
                     print("Aviso: Uma linha no arquivo de contatos está incompleta:", parts)
     except FileNotFoundError:
         pass
+
+valor_filtro_entry_date = None  # Definindo a variável globalmente
+
+def consulta_lancamentos():
+    global valor_filtro_entry_date  # Importante para modificar a variável global
+
+    # Criar uma nova janela para a consulta
+    consulta_window = tkinter.Toplevel(window)
+    consulta_window.title("Consulta de Lançamentos")
+
+    # Configurar o peso das linhas e colunas para o layout responsivo
+    consulta_window.grid_columnconfigure(1, weight=1)
+    consulta_window.grid_rowconfigure(1, weight=1)
+
+    # Criar e posicionar os widgets para seleção do filtro
+    filtro_label = tkinter.Label(consulta_window, text="Filtrar por:")
+    filtro_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+
+    filtro_combobox = ttk.Combobox(consulta_window, values=["Banco", "Data"])
+    filtro_combobox.grid(row=0, column=1, padx=10, pady=5)
+
+    valor_filtro_entry = ttk.Combobox(consulta_window, values=bancos, state="readonly")
+    valor_filtro_entry.grid(row=0, column=2, padx=10, pady=5)
+    valor_filtro_entry.set(bancos[0])  # Definir o primeiro banco como valor padrão
+
+    # Função para atualizar o campo de entrada de acordo com o filtro selecionado
+    def atualizar_campo():
+        global valor_filtro_entry_date  # Importante para modificar a variável global
+        if filtro_combobox.get() == "Data":
+            # Remover o combobox de bancos
+            valor_filtro_entry.grid_forget()
+            # Adicionar campo de entrada para a data
+            valor_filtro_entry_date = tkinter.Entry(consulta_window)
+            valor_filtro_entry_date.grid(row=0, column=2, padx=10, pady=5)
+            valor_filtro_entry_date.insert(0, "dd/mm/aaaa")  # Texto padrão
+        else:
+            # Remover o campo de entrada de data
+            valor_filtro_entry_date.grid_forget()
+            # Adicionar o combobox de bancos
+            valor_filtro_entry.grid(row=0, column=2, padx=10, pady=5)
+
+    # Chamar a função para atualizar o campo sempre que o filtro for alterado
+    filtro_combobox.bind("<<ComboboxSelected>>", lambda event: atualizar_campo())
+
+    # Definir função para buscar os lançamentos de acordo com o filtro selecionado
+    def buscar_lancamentos():
+        filtro = filtro_combobox.get()
+
+        if filtro == "Banco":
+            valor_filtro = valor_filtro_entry.get()
+            # Buscar os lançamentos pelo banco selecionado
+            resultados = [item for item in contacts_listbox.get(0, tkinter.END) if f"Banco: {valor_filtro}" in item]
+        elif filtro == "Data":
+            valor_filtro = valor_filtro_entry_date.get()
+            # Buscar os lançamentos pela data inserida
+            resultados = [item for item in contacts_listbox.get(0, tkinter.END) if f"Vencimento: {valor_filtro}" in item]
+        else:
+            messagebox.showerror("Erro", "Selecione um filtro válido.")
+            return
+
+        # Limpar a Listbox de resultados antes de exibir os novos resultados
+        contacts_resultados_listbox.delete(0, tkinter.END)
+
+        # Adicionar os resultados à Listbox
+        for resultado in resultados:
+            contacts_resultados_listbox.insert(tkinter.END, resultado)
+
+    # Adicionar botão para buscar os lançamentos
+    buscar_button = tkinter.Button(consulta_window, text="Buscar", command=buscar_lancamentos)
+    buscar_button.grid(row=0, column=3, padx=10, pady=5, sticky="e")
+
+    # Criar uma Listbox para exibir os resultados da consulta
+    contacts_resultados_listbox = tkinter.Listbox(consulta_window, bg="#262626", fg="white")
+    contacts_resultados_listbox.grid(row=1, column=0, columnspan=4, padx=10, pady=5, sticky="nsew")
+
+    # Configurar o peso da Listbox para expandir conforme necessário
+    consulta_window.grid_rowconfigure(1, weight=1)
+    consulta_window.grid_columnconfigure(0, weight=1)
 
 
 window = tkinter.Tk()
@@ -228,23 +310,6 @@ fch_calendario_button.grid_remove()
 contacts_listbox = tkinter.Listbox(window, bg="#262626", fg="white", width=60, height=10)
 contacts_listbox.pack()
 
-delete_button = customtkinter.CTkButton(
-    master=frame,
-    command=deleta_contato,
-    text="Excluir",
-    text_color="white",
-    hover=True,
-    hover_color="red",
-    height=40,
-    width=120,
-    border_width=2,
-    corner_radius=20,
-    border_color="black",
-    bg_color="#262626",
-    fg_color="#262626",
-)
-delete_button.grid(row=6, column=0, columnspan=2, pady=15)
-
 add_button = customtkinter.CTkButton(
     master=frame,
     command=add_contato,
@@ -260,8 +325,41 @@ add_button = customtkinter.CTkButton(
     bg_color="#262626",
     fg_color="#262626",
 )
-add_button.grid(row=5, column=0, columnspan=2, pady=15)
+add_button.grid(row=5, column=0, padx=5, pady=15)
 
+delete_button = customtkinter.CTkButton(
+    master=frame,
+    command=deleta_contato,
+    text="Excluir",
+    text_color="white",
+    hover=True,
+    hover_color="red",
+    height=40,
+    width=120,
+    border_width=2,
+    corner_radius=20,
+    border_color="black",
+    bg_color="#262626",
+    fg_color="#262626",
+)
+delete_button.grid(row=5, column=1, padx=5, pady=15)
+
+consulta_button = customtkinter.CTkButton(
+    master=frame,
+    command=consulta_lancamentos,
+    text="Consulta",
+    text_color="white",
+    hover=True,
+    hover_color="blue",
+    height=40,
+    width=120,
+    border_width=2,
+    corner_radius=20,
+    border_color="black",
+    bg_color="#262626",
+    fg_color="#262626",
+)
+consulta_button.grid(row=5, column=2, padx=5, pady=15)
 
 carrega_contatos()
 carrega_lista_tamanho()
