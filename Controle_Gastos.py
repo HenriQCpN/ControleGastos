@@ -10,8 +10,8 @@ def add_contato():
     banco = banco_combobox.get()
     valor = valor_entry.get()
     parcela = parcela_entry.get()
-    descricao = descricao_entry.get()
-    
+    descricao = descricao_entry.get().replace('\n', '\\n') 
+
     try:
         valor = float(valor)
     except ValueError:
@@ -20,13 +20,8 @@ def add_contato():
     
     vencimento = vencimento_calendar.get_date()
 
-    # Se houver quebras de linha na descrição, dividir em várias linhas
-    descricao_lines = descricao.split('\n')
-    
     # Construir o texto do item da Listbox
-    item_text = f"Banco: {banco} - Valor: R$ {valor:.2f} - Parcela: {parcela} - Vencimento: {vencimento} - Descrição:"
-    for line in descricao_lines:
-        item_text += f"\n  {line}"
+    item_text = f"Banco: {banco} - Valor: R$ {valor:.2f} - Parcela: {parcela} - Vencimento: {vencimento} - Descrição: {descricao}"
     
     # Inserir o item na Listbox
     contacts_listbox.insert(tkinter.END, item_text)
@@ -68,7 +63,8 @@ def salva_contato():
     with open(file_path, "w") as file:
         for index in range(contacts_listbox.size()):
             item_text = contacts_listbox.get(index)
-            print("Item a ser gravado:", item_text)  # Adiciona essa linha para ver o que está sendo gravado
+            # Substitui caracteres especiais por quebras de linha
+            item_text = item_text.replace('\\n', '\n')
             file.write(item_text + '\n')
 
     print("Contatos salvos com sucesso!")
@@ -88,14 +84,7 @@ def carrega_contatos():
     try:
         with open(file_path, "r") as file:
             for line in file:
-                parts = line.strip().split(" - ")
-                
-                # Verificar se a linha possui pelo menos cinco partes
-                if len(parts) >= 5:
-                    banco, valor, parcela, vencimento, descricao = parts[:5]
-                    contacts_listbox.insert(tkinter.END, f"{banco} - Valor: R$ {valor} - Parcela: {parcela} - Vencimento: {vencimento} - Descrição: {descricao}")
-                else:
-                    print("Aviso: Uma linha no arquivo de contatos está incompleta:", parts)
+                contacts_listbox.insert(tkinter.END, line.strip())
     except FileNotFoundError:
         pass
 
@@ -112,7 +101,7 @@ def consulta_lancamentos():
     consulta_window.grid_columnconfigure(1, weight=1)
     consulta_window.grid_rowconfigure(1, weight=1)
 
-    # Criar e posicionar os widgets para seleção do filtro
+    
     filtro_label = tkinter.Label(consulta_window, text="Filtrar por:")
     filtro_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
 
@@ -125,16 +114,15 @@ def consulta_lancamentos():
 
     # Função para atualizar o campo de entrada de acordo com o filtro selecionado
     def atualizar_campo():
-        global valor_filtro_entry_date  # Importante para modificar a variável global
+        global valor_filtro_entry_date
         if filtro_combobox.get() == "Data":
-            # Remover o combobox de bancos
+            
             valor_filtro_entry.grid_forget()
             # Adicionar campo de entrada para a data
             valor_filtro_entry_date = tkinter.Entry(consulta_window)
             valor_filtro_entry_date.grid(row=0, column=2, padx=10, pady=5)
             valor_filtro_entry_date.insert(0, "dd/mm/aaaa")  # Texto padrão
         else:
-            # Remover o campo de entrada de data
             valor_filtro_entry_date.grid_forget()
             # Adicionar o combobox de bancos
             valor_filtro_entry.grid(row=0, column=2, padx=10, pady=5)
@@ -158,7 +146,6 @@ def consulta_lancamentos():
             messagebox.showerror("Erro", "Selecione um filtro válido.")
             return
 
-        # Limpar a Listbox de resultados antes de exibir os novos resultados
         contacts_resultados_listbox.delete(0, tkinter.END)
 
         # Adicionar os resultados à Listbox
@@ -173,15 +160,89 @@ def consulta_lancamentos():
     contacts_resultados_listbox = tkinter.Listbox(consulta_window, bg="#262626", fg="white")
     contacts_resultados_listbox.grid(row=1, column=0, columnspan=4, padx=10, pady=5, sticky="nsew")
 
-    # Configurar o peso da Listbox para expandir conforme necessário
+    
     consulta_window.grid_rowconfigure(1, weight=1)
     consulta_window.grid_columnconfigure(0, weight=1)
 
+def mostrar_grafico():
+    grafico_window = tkinter.Toplevel(window)
+    grafico_window.title("Gráfico de Gastos")
+
+    # Calcula o valor total cadastrado
+    total_valor = 0
+    gastos_por_banco = {banco: 0 for banco in bancos}
+    vencimentos = []
+
+    # Determina o início do dia atual
+    inicio_do_dia_atual = datetime.combine(datetime.today(), datetime.min.time())
+
+    for item in contacts_listbox.get(0, tkinter.END):
+        parts = item.split(" - ")
+        valor_part = next(part for part in parts if part.startswith("Valor:")).split(": ")[1]
+        banco_part = next(part for part in parts if part.startswith("Banco:")).split(": ")[1]
+        vencimento_part = next(part for part in parts if part.startswith("Vencimento:")).split(": ")[1]
+
+        valor = float(valor_part.replace("R$", "").strip())
+        total_valor += valor
+        gastos_por_banco[banco_part] += valor
+
+        vencimento_date = datetime.strptime(vencimento_part, "%d/%m/%Y")
+
+        # Verifica se o vencimento é hoje ou em datas futuras
+        if vencimento_date >= inicio_do_dia_atual:
+            vencimentos.append((vencimento_date, item))
+
+    
+    vencimentos.sort(key=lambda x: x[0])
+
+    # Retorna o banco com mais gastos
+    banco_mais_gastos = max(gastos_por_banco, key=gastos_por_banco.get)
+    total_banco_mais_gastos = gastos_por_banco[banco_mais_gastos]
+
+    # mostra as informações na janela de gráfico
+    ttk.Label(grafico_window, text=f"Valor Total Cadastrado: R$ {total_valor:.2f}").pack(pady=10)
+    ttk.Label(grafico_window, text=f"Banco com Mais Gastos: {banco_mais_gastos} (R$ {total_banco_mais_gastos:.2f})").pack(pady=10)
+
+    ttk.Label(grafico_window, text="Próximos Itens a Pagar:").pack(pady=10)
+
+    
+    text_frame = ttk.Frame(grafico_window)
+    text_frame.pack(fill=tkinter.BOTH, expand=True)
+
+
+    text_widget = tkinter.Text(text_frame, wrap=tkinter.NONE, bg="#262626", fg="white")
+    text_widget.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
+
+    scroll_y = tkinter.Scrollbar(text_frame, orient=tkinter.VERTICAL, command=text_widget.yview)
+    scroll_y.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+
+    scroll_x = tkinter.Scrollbar(grafico_window, orient=tkinter.HORIZONTAL, command=text_widget.xview)
+    scroll_x.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+
+    text_widget.config(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+    for vencimento_date, item in vencimentos[:10]:  
+        text_widget.insert(tkinter.END, item + "\n")
+
+    
+    grafico_window.geometry("600x400")
 
 window = tkinter.Tk()
 window.configure(bg='#262626')
 window.title("Contact List")
 window.protocol("WM_deleta_janela", on_closing)
+
+# Adicionando o menu
+menu_bar = tkinter.Menu(window)
+window.config(menu=menu_bar)
+
+# Menu principal
+opcoes_menu = tkinter.Menu(menu_bar, tearoff=0)
+menu_bar.add_cascade(label="Opções", menu=opcoes_menu)
+opcoes_menu.add_command(label="Consulta", command=consulta_lancamentos)
+opcoes_menu.add_command(label="Gráfico", command=mostrar_grafico)
+opcoes_menu.add_command(label="Relatório", command=lambda: messagebox.showinfo("Relatório", "Funcionalidade de relatório ainda não implementada."))
+
 
 frame = tkinter.Frame(window, background='#262626')
 frame.pack()
@@ -343,23 +404,6 @@ delete_button = customtkinter.CTkButton(
     fg_color="#262626",
 )
 delete_button.grid(row=5, column=1, padx=5, pady=15)
-
-consulta_button = customtkinter.CTkButton(
-    master=frame,
-    command=consulta_lancamentos,
-    text="Consulta",
-    text_color="white",
-    hover=True,
-    hover_color="blue",
-    height=40,
-    width=120,
-    border_width=2,
-    corner_radius=20,
-    border_color="black",
-    bg_color="#262626",
-    fg_color="#262626",
-)
-consulta_button.grid(row=5, column=2, padx=5, pady=15)
 
 carrega_contatos()
 carrega_lista_tamanho()
