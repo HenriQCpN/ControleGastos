@@ -5,12 +5,14 @@ from tkinter import messagebox
 from tkcalendar import Calendar
 from datetime import datetime
 import os
+import pandas as pd
+from tkinter.filedialog import asksaveasfilename
 
 def add_contato():
     banco = banco_combobox.get()
     valor = valor_entry.get()
     parcela = parcela_entry.get()
-    descricao = descricao_entry.get().replace('\n', '\\n') 
+    vencimento = vencimento_calendar.get_date()
 
     try:
         valor = float(valor)
@@ -18,7 +20,7 @@ def add_contato():
         messagebox.showerror("Erro", "O valor deve ser um número válido.")
         return
     
-    vencimento = vencimento_calendar.get_date()
+    descricao = descricao_entry.get("1.0", tkinter.END).strip().replace('\n', '\\n')
 
     # Construir o texto do item da Listbox
     item_text = f"Banco: {banco} - Valor: R$ {valor:.2f} - Parcela: {parcela} - Vencimento: {vencimento} - Descrição: {descricao}"
@@ -34,17 +36,11 @@ def deleta_contato():
     selected_index = contacts_listbox.curselection()
     if selected_index:  # Verifica se uma linha está selecionada
         contacts_listbox.delete(selected_index)
-        salva_contato()  
+        salva_contato()
+        carrega_lista_tamanho()  # Adiciona esta linha para ajustar a largura após a exclusão
     else:
         messagebox.showinfo("Aviso", "Selecione uma linha para excluir.")
     carrega_lista_tamanho()
-
-def carrega_lista_tamanho():
-    if contacts_listbox.size() > 0:
-        max_width = max(len(item) for item in contacts_listbox.get(0, tkinter.END))
-    else:
-        max_width = 60  # Largura padrão se a Listbox estiver vazia
-    contacts_listbox.config(width=max_width)
 
 def abr_calendario():
     vencimento_calendar.selection_set(datetime.today())
@@ -88,6 +84,13 @@ def carrega_contatos():
     except FileNotFoundError:
         pass
 
+def carrega_lista_tamanho():
+    # Calcula o comprimento máximo das linhas
+    max_line_length = max(len(item) for item in contacts_listbox.get(0, tkinter.END))
+    
+    # Define a largura da Listbox com base no comprimento máximo das linhas
+    font_width = tkinter.font.Font().measure("A")
+    contacts_listbox.config(width=max_line_length + int(max_line_length * font_width / 10))
 valor_filtro_entry_date = None  # Definindo a variável globalmente
 
 def consulta_lancamentos():
@@ -97,35 +100,33 @@ def consulta_lancamentos():
     consulta_window = tkinter.Toplevel(window)
     consulta_window.title("Consulta de Lançamentos")
 
-    # Configurar o peso das linhas e colunas para o layout responsivo
-    consulta_window.grid_columnconfigure(1, weight=1)
-    consulta_window.grid_rowconfigure(1, weight=1)
+    # Criar um frame para os campos de filtro
+    filtro_frame = tkinter.Frame(consulta_window)
+    filtro_frame.grid(row=0, column=0, sticky="w", padx=10, pady=5)
 
-    
-    filtro_label = tkinter.Label(consulta_window, text="Filtrar por:")
+    filtro_label = tkinter.Label(filtro_frame, text="Filtrar por:")
     filtro_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
 
-    filtro_combobox = ttk.Combobox(consulta_window, values=["Banco", "Data"])
+    filtro_combobox = ttk.Combobox(filtro_frame, values=["Banco", "Data"])
     filtro_combobox.grid(row=0, column=1, padx=10, pady=5)
 
-    valor_filtro_entry = ttk.Combobox(consulta_window, values=bancos, state="readonly")
+    valor_filtro_entry = ttk.Combobox(filtro_frame, values=bancos, state="readonly")
     valor_filtro_entry.grid(row=0, column=2, padx=10, pady=5)
     valor_filtro_entry.set(bancos[0])  # Definir o primeiro banco como valor padrão
 
+    valor_filtro_entry_date = tkinter.Entry(filtro_frame)
+    valor_filtro_entry_date.grid(row=0, column=2, padx=10, pady=5)
+    valor_filtro_entry_date.insert(0, "dd/mm/aaaa")
+    valor_filtro_entry_date.grid_remove()
+
     # Função para atualizar o campo de entrada de acordo com o filtro selecionado
     def atualizar_campo():
-        global valor_filtro_entry_date
         if filtro_combobox.get() == "Data":
-            
             valor_filtro_entry.grid_forget()
-            # Adicionar campo de entrada para a data
-            valor_filtro_entry_date = tkinter.Entry(consulta_window)
-            valor_filtro_entry_date.grid(row=0, column=2, padx=10, pady=5)
-            valor_filtro_entry_date.insert(0, "dd/mm/aaaa")  # Texto padrão
+            valor_filtro_entry_date.grid()
         else:
             valor_filtro_entry_date.grid_forget()
-            # Adicionar o combobox de bancos
-            valor_filtro_entry.grid(row=0, column=2, padx=10, pady=5)
+            valor_filtro_entry.grid()
 
     # Chamar a função para atualizar o campo sempre que o filtro for alterado
     filtro_combobox.bind("<<ComboboxSelected>>", lambda event: atualizar_campo())
@@ -150,17 +151,16 @@ def consulta_lancamentos():
 
         # Adicionar os resultados à Listbox
         for resultado in resultados:
-            contacts_resultados_listbox.insert(tkinter.END, resultado)
+            contacts_resultados_listbox.insert(tkinter.END, resultado)            
 
     # Adicionar botão para buscar os lançamentos
-    buscar_button = tkinter.Button(consulta_window, text="Buscar", command=buscar_lancamentos)
+    buscar_button = tkinter.Button(filtro_frame, text="Buscar", command=buscar_lancamentos)
     buscar_button.grid(row=0, column=3, padx=10, pady=5, sticky="e")
 
     # Criar uma Listbox para exibir os resultados da consulta
     contacts_resultados_listbox = tkinter.Listbox(consulta_window, bg="#262626", fg="white")
-    contacts_resultados_listbox.grid(row=1, column=0, columnspan=4, padx=10, pady=5, sticky="nsew")
+    contacts_resultados_listbox.grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
 
-    
     consulta_window.grid_rowconfigure(1, weight=1)
     consulta_window.grid_columnconfigure(0, weight=1)
 
@@ -192,7 +192,6 @@ def mostrar_grafico():
         if vencimento_date >= inicio_do_dia_atual:
             vencimentos.append((vencimento_date, item))
 
-    
     vencimentos.sort(key=lambda x: x[0])
 
     # Retorna o banco com mais gastos
@@ -203,209 +202,157 @@ def mostrar_grafico():
     ttk.Label(grafico_window, text=f"Valor Total Cadastrado: R$ {total_valor:.2f}").pack(pady=10)
     ttk.Label(grafico_window, text=f"Banco com Mais Gastos: {banco_mais_gastos} (R$ {total_banco_mais_gastos:.2f})").pack(pady=10)
 
-    ttk.Label(grafico_window, text="Próximos Itens a Pagar:").pack(pady=10)
+    ttk.Label(grafico_window, text="Próximos Itens a Vencer:").pack(pady=10)
 
-    
-    text_frame = ttk.Frame(grafico_window)
-    text_frame.pack(fill=tkinter.BOTH, expand=True)
+    # cria uma Listbox para exibir os próximos itens a vencer
+    vencimentos_listbox = tkinter.Listbox(grafico_window, bg="#262626", fg="white")
+    vencimentos_listbox.pack(fill=tkinter.BOTH, expand=True, padx=10, pady=10)
 
+    for vencimento_date, item in vencimentos:
+        vencimentos_listbox.insert(tkinter.END, item)
 
-    text_widget = tkinter.Text(text_frame, wrap=tkinter.NONE, bg="#262626", fg="white")
-    text_widget.pack(side=tkinter.LEFT, fill=tkinter.BOTH, expand=True)
-
-    scroll_y = tkinter.Scrollbar(text_frame, orient=tkinter.VERTICAL, command=text_widget.yview)
-    scroll_y.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-
-    scroll_x = tkinter.Scrollbar(grafico_window, orient=tkinter.HORIZONTAL, command=text_widget.xview)
-    scroll_x.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-
-    text_widget.config(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
-
-    for vencimento_date, item in vencimentos[:10]:  
-        text_widget.insert(tkinter.END, item + "\n")
-
-    
-    grafico_window.geometry("600x400")
-
-window = tkinter.Tk()
-window.configure(bg='#262626')
-window.title("Contact List")
-window.protocol("WM_deleta_janela", on_closing)
-
-# Adicionando o menu
-menu_bar = tkinter.Menu(window)
-window.config(menu=menu_bar)
-
-# Menu principal
-opcoes_menu = tkinter.Menu(menu_bar, tearoff=0)
-menu_bar.add_cascade(label="Opções", menu=opcoes_menu)
-opcoes_menu.add_command(label="Consulta", command=consulta_lancamentos)
-opcoes_menu.add_command(label="Gráfico", command=mostrar_grafico)
-opcoes_menu.add_command(label="Relatório", command=lambda: messagebox.showinfo("Relatório", "Funcionalidade de relatório ainda não implementada."))
+    # Ajustar a largura da Listbox de acordo com o tamanho máximo de linha dos itens
+    max_line_length = max(len(item) for item in vencimentos_listbox.get(0, tkinter.END))
+    vencimentos_listbox.config(width=max_line_length)
 
 
-frame = tkinter.Frame(window, background='#262626')
-frame.pack()
+def gerar_relatorio():
+    relatorio_window = tkinter.Toplevel(window)
+    relatorio_window.title("Gerar Relatório")
 
-banco_label = customtkinter.CTkLabel(
-    master=frame,
-    text="Banco:",
-    text_color="black",
-    width=120,
-    height=25,
-    fg_color=("white", "gray75"),
-    bg_color="#262626",
-    corner_radius=8)
-banco_label.grid(row=0, column=0, padx=7, pady=10)
+    # Layout da nova janela
+    relatorio_window.grid_columnconfigure(1, weight=1)
+    relatorio_window.grid_rowconfigure(1, weight=1)
 
-valor_label = customtkinter.CTkLabel(
-    master=frame,
-    text="Valor:",
-    text_color="black",
-    width=120,
-    height=25,
-    fg_color=("white", "gray75"),
-    bg_color="#262626",
-    corner_radius=8)
-valor_label.grid(row=1, column=0)
+    filtro_label = tkinter.Label(relatorio_window, text="Filtrar por:")
+    filtro_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
 
-parcela_label = customtkinter.CTkLabel(
-    master=frame,
-    text="Parcela:",
-    text_color="black",
-    width=120,
-    height=25,
-    fg_color=("white", "gray75"),
-    bg_color="#262626",
-    corner_radius=8)
-parcela_label.grid(row=2, column=0)
+    filtro_combobox = ttk.Combobox(relatorio_window, values=["Banco", "Data", "Todos"])
+    filtro_combobox.grid(row=0, column=1, padx=10, pady=5)
 
-vencimento_label = customtkinter.CTkLabel(
-    master=frame,
-    text="Vencimento:",
-    text_color="black",
-    width=120,
-    height=25,
-    fg_color=("white", "gray75"),
-    bg_color="#262626",
-    corner_radius=8)
-vencimento_label.grid(row=3, column=0)
+    valor_filtro_entry = ttk.Combobox(relatorio_window, values=bancos, state="readonly")
+    valor_filtro_entry.grid(row=0, column=2, padx=10, pady=5)
+    valor_filtro_entry.set(bancos[0])
 
-descricao_label = customtkinter.CTkLabel(
-    master=frame,
-    text="Descrição:",
-    text_color="black",
-    width=120,
-    height=25,
-    fg_color=("white", "gray75"),
-    bg_color="#262626",
-    corner_radius=8)
-descricao_label.grid(row=4, column=0)
+    valor_filtro_entry_date = tkinter.Entry(relatorio_window)
+    valor_filtro_entry_date.grid(row=0, column=2, padx=10, pady=5)
+    valor_filtro_entry_date.insert(0, "dd/mm/aaaa")
+    valor_filtro_entry_date.grid_remove()
 
-bancos = ["Nubank", "Itaú", "Santander", "C6", "Caixa"]
+    def atualizar_campo():
+        if filtro_combobox.get() == "Data":
+            valor_filtro_entry.grid_remove()
+            valor_filtro_entry_date.grid()
+        elif filtro_combobox.get() == "Banco":
+            valor_filtro_entry_date.grid_remove()
+            valor_filtro_entry.grid()
+        else:
+            valor_filtro_entry_date.grid_remove()
+            valor_filtro_entry.grid_remove()
 
-banco_combobox = ttk.Combobox(frame, values=bancos, state="readonly")
-banco_combobox.grid(row=0, column=1, padx=7, pady=10)
+    filtro_combobox.bind("<<ComboboxSelected>>", lambda event: atualizar_campo())
 
-valor_entry = customtkinter.CTkEntry(
-    master=frame,
-    text_color="white",
-    border_width=2,
-    border_color="#d3d3d3",
-    bg_color="#262626",
-    fg_color="#262626",
-    corner_radius=5)
-valor_entry.grid(row=1, column=1, padx=7, pady=10)
+    def salvar_relatorio():
+        filtro = filtro_combobox.get()
+        if filtro == "Banco":
+            valor_filtro = valor_filtro_entry.get()
+            resultados = [item for item in contacts_listbox.get(0, tkinter.END) if f"Banco: {valor_filtro}" in item]
+        elif filtro == "Data":
+            valor_filtro = valor_filtro_entry_date.get()
+            resultados = [item for item in contacts_listbox.get(0, tkinter.END) if f"Vencimento: {valor_filtro}" in item]
+        else:
+            resultados = contacts_listbox.get(0, tkinter.END)
 
-parcela_entry = customtkinter.CTkEntry(
-    master=frame,
-    text_color="white",
-    border_width=2,
-    border_color="#d3d3d3",
-    bg_color="#262626",
-    fg_color="#262626",
-    corner_radius=5)
-parcela_entry.grid(row=2, column=1, padx=7, pady=10)
+        if not resultados:
+            messagebox.showinfo("Sem resultados", "Nenhum resultado encontrado para o filtro selecionado.")
+            return
 
+        # Convertendo os resultados para um DataFrame do pandas
+        data = []
+        for resultado in resultados:
+            parts = resultado.split(" - ")
+            banco = parts[0].split(": ")[1]
+            valor = parts[1].split(": ")[1]
+            parcela = parts[2].split(": ")[1]
+            vencimento = parts[3].split(": ")[1]
+            descricao = parts[4].split(": ")[1]
+            data.append([banco, valor, parcela, vencimento, descricao])
+
+        df = pd.DataFrame(data, columns=["Banco", "Valor", "Parcela", "Vencimento", "Descrição"])
+
+        # Pedir para o usuário salvar o arquivo
+        file_path = asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
+        if file_path:
+            df.to_excel(file_path, index=False)
+            messagebox.showinfo("Relatório salvo", f"Relatório salvo com sucesso em: {file_path}")
+
+    gerar_button = tkinter.Button(relatorio_window, text="Gerar Relatório", command=salvar_relatorio)
+    gerar_button.grid(row=0, column=3, padx=10, pady=5, sticky="e")
+
+customtkinter.set_appearance_mode("System")
+customtkinter.set_default_color_theme("blue")
+
+bancos = ["Santander", "Nubank", "Itaú", "Caixa Econômica", "Bradesco", "Banco do Brasil"]
+
+window = customtkinter.CTk()
+window.title("Controle de Gastos")
+window.geometry("800x600")
+window.grid_columnconfigure(1, weight=1)
+window.grid_rowconfigure(5, weight=1)
+
+frame = customtkinter.CTkFrame(window, corner_radius=10)
+frame.grid(row=0, column=0, padx=10, pady=10, sticky="ns")
+frame.grid_rowconfigure(6, weight=1)
+
+title_label = customtkinter.CTkLabel(frame, text="Cadastramento de Gastos", font=("Arial", 20))
+title_label.grid(row=0, column=0, columnspan=2, pady=10)
+
+banco_label = customtkinter.CTkLabel(frame, text="Banco:")
+banco_label.grid(row=1, column=0, padx=10, pady=5, sticky="e")
+banco_combobox = customtkinter.CTkComboBox(frame, values=bancos)
+banco_combobox.grid(row=1, column=1, padx=10, pady=5)
+banco_combobox.set(bancos[0])
+
+valor_label = customtkinter.CTkLabel(frame, text="Valor:")
+valor_label.grid(row=2, column=0, padx=10, pady=5, sticky="e")
+valor_entry = customtkinter.CTkEntry(frame)
+valor_entry.grid(row=2, column=1, padx=10, pady=5)
+
+parcela_label = customtkinter.CTkLabel(frame, text="Parcela:")
+parcela_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
+parcela_entry = customtkinter.CTkEntry(frame)
+parcela_entry.grid(row=3, column=1, padx=10, pady=5)
+
+vencimento_label = customtkinter.CTkLabel(frame, text="Vencimento:")
+vencimento_label.grid(row=4, column=0, padx=10, pady=5, sticky="w")
 vencimento_calendar = Calendar(frame, selectmode="day", date_pattern="dd/mm/yyyy")
+abr_calendario_button = customtkinter.CTkButton(frame, text="Abrir Calendário", command=abr_calendario)
+abr_calendario_button.grid(row=4, column=1, pady=5)
+fch_calendario_button = customtkinter.CTkButton(frame, text="Fechar Calendário", command=fch_calendario)
 
-descricao_entry = customtkinter.CTkEntry(
-    master=frame,
-    text_color="white",
-    border_width=2,
-    border_color="#d3d3d3",
-    bg_color="#262626",
-    fg_color="#262626",
-    corner_radius=5)
-descricao_entry.grid(row=4, column=1, padx=7, pady=10)
+descricao_label = customtkinter.CTkLabel(frame, text="Descrição:")
+descricao_label.grid(row=5, column=0, padx=10, pady=5, sticky="e")
+descricao_entry = customtkinter.CTkTextbox(frame, height=100)
+descricao_entry.grid(row=5, column=1, padx=10, pady=5)
 
-abr_calendario_button = customtkinter.CTkButton(
-    master=frame,
-    command=abr_calendario,
-    text="Selecionar Data",
-    text_color="white",
-    hover=True,
-    hover_color="Blue",
-    height=40,
-    width=120,
-    border_width=2,
-    corner_radius=20,
-    border_color="black",
-    bg_color="#262626",
-    fg_color="#262626",
-)
-abr_calendario_button.grid(row=3, column=1, pady=15)
+contacts_listbox = tkinter.Listbox(window, bg="#262626", fg="white")
+contacts_listbox.grid(row=0, column=1, rowspan=6, padx=10, pady=10, sticky="nsew")
 
-fch_calendario_button = tkinter.Button(
-    master=frame,
-    text="X",
-    command=fch_calendario,
-    bg="#262626",
-    fg="white",
-    relief="flat",
-    font=("Arial", 10, "bold"),
-)
-fch_calendario_button.grid(row=3, column=1, pady=5, sticky=tkinter.E)
-fch_calendario_button.grid_remove()
+add_button = customtkinter.CTkButton(frame, text="Adicionar", command=add_contato)
+add_button.grid(row=6, column=1, padx=10, pady=10)
 
-contacts_listbox = tkinter.Listbox(window, bg="#262626", fg="white", width=60, height=10)
-contacts_listbox.pack()
+delete_button = customtkinter.CTkButton(frame, text="Excluir", command=deleta_contato)
+delete_button.grid(row=7, column=1, padx=10, pady=10, sticky="s")
 
-add_button = customtkinter.CTkButton(
-    master=frame,
-    command=add_contato,
-    text="Adicionar",
-    text_color="white",
-    hover=True,
-    hover_color="green",
-    height=40,
-    width=120,
-    border_width=2,
-    corner_radius=20,
-    border_color="black",
-    bg_color="#262626",
-    fg_color="#262626",
-)
-add_button.grid(row=5, column=0, padx=5, pady=15)
-
-delete_button = customtkinter.CTkButton(
-    master=frame,
-    command=deleta_contato,
-    text="Excluir",
-    text_color="white",
-    hover=True,
-    hover_color="red",
-    height=40,
-    width=120,
-    border_width=2,
-    corner_radius=20,
-    border_color="black",
-    bg_color="#262626",
-    fg_color="#262626",
-)
-delete_button.grid(row=5, column=1, padx=5, pady=15)
+menubar = tkinter.Menu(window)
+opcoes_menu = tkinter.Menu(menubar, tearoff=0)
+opcoes_menu.add_command(label="Consultar", command=consulta_lancamentos)
+opcoes_menu.add_command(label="Gráfico", command=mostrar_grafico)
+opcoes_menu.add_command(label="Relatório", command=gerar_relatorio)
+menubar.add_cascade(label="Opções", menu=opcoes_menu)
+window.config(menu=menubar)
 
 carrega_contatos()
 carrega_lista_tamanho()
-
+window.protocol("WM_DELETE_WINDOW", on_closing)
 window.mainloop()
